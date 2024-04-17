@@ -68,7 +68,6 @@ class App:
 
 class Game:
     def __init__(self, canvas: tkinter.Canvas, size: int, max_col, max_row) -> None:
-        self.food = None
         self.canvas = canvas
         self.size = size
         self.col = max_col // TILE_SIZE
@@ -87,22 +86,35 @@ class Game:
             key_left='Left',
             key_right='Right'
         )
+        self.food = None
         self.update()
 
     def update(self) -> None:
         self.snake.collide_border()
+        self.snake.collide_tail()
         if not self.food:
+            clean_cell = []
+            for col in range(self.max_col//TILE_SIZE):
+                col = col * TILE_SIZE
+                for row in range(self.max_row//TILE_SIZE):
+                    row = row * TILE_SIZE
+                    if col != self.snake.col and row != self.snake.row:
+                        for i in self.snake.segments:
+                            if col != self.snake.segments[i].col and row != self.snake.segments[i].row:
+                                clean_cell.append[(col, row)]
+            food_cord = random.choice(clean_cell)
             self.food = Food(
                 self.canvas,
-                random.randint(0, self.col) * TILE_SIZE,
-                random.randint(0, self.row) * TILE_SIZE
+                food_cord[0],
+                food_cord[1]
             )
-        self.food.draw()
         self.canvas.delete('snake')
         self.canvas.delete('food')
-        self.canvas.delete('tail')
+        self.food.draw()
         self.snake.draw()
-        self.snake.move()
+        if self.snake.is_move:
+            self.snake.move()
+            self.food = self.snake.eating(self.food)
         self.canvas.after(132, self.update)
 
     def on_key(self, event: tkinter.Event):
@@ -136,8 +148,6 @@ class Snake:
         self.key_right = key_right
         self.direction = (1, 0)
         self.segments = dict()
-        for _ in range(15):
-            self.create_new_segment()
 
     def create_new_segment(self):
         self.segments[len(self.segments)+1] = Tail(
@@ -169,17 +179,28 @@ class Snake:
         self.row += TILE_SIZE * self.direction[1]
 
     def change_direction(self, direction):
+        if self.direction[0] == -direction[0]:
+            return
+        if self.direction[1] == -direction[1]:
+            return
         self.direction = direction
 
     def on_key(self, event: tkinter.Event):
-        if event.keysym == self.key_up and self.direction[1] != 1:
-            self.change_direction((0, -1))
-        if event.keysym == self.key_down and self.direction[1] != -1:
-            self.change_direction((0, 1))
-        if event.keysym == self.key_left and self.direction[0] != 1:
-            self.change_direction((-1, 0))
-        if event.keysym == self.key_right and self.direction[0] != -1:
-            self.change_direction((1, 0))
+        if event.keysym == self.key_up:
+            direction = (0, -1)
+        elif event.keysym == self.key_down:
+            direction = (0, 1)
+        elif event.keysym == self.key_left:
+            direction = (-1, 0)
+        elif event.keysym == self.key_right:
+            direction = (1, 0)
+        self.change_direction(direction)
+
+    def eating(self, food):
+        if self.col == food.col and self.row == food.row:
+            self.create_new_segment()
+            food = None
+        return food
 
     def collide_border(self):
         if self.col < 0 or self.col > self.max_col:
@@ -190,11 +211,13 @@ class Snake:
             self.is_move = False
 
     def collide_tail(self):
+        return
         # FIXME: если есть хвост, то змея с нми сразу сталкивается
         for i in self.segments:
             if self.col == self.segments[i].col:
                 if self.row == self.segments[i].row:
                     self.canvas['bg'] = 'red'
+                    self.is_move = False
 
 
 class Tail():
@@ -223,7 +246,7 @@ class Tail():
             self.col + TILE_SIZE,
             self.row + TILE_SIZE,
             fill=self.color,
-            tags='tail'
+            tags='snake'
         )
 
     def move(self):
@@ -249,7 +272,7 @@ class Food:
             self.row,
             self.col + TILE_SIZE,
             self.row + TILE_SIZE,
-            fill=self.color,
+            fill='red',
             tags='food'
         )
 
